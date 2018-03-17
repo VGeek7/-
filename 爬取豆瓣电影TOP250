@@ -1,0 +1,51 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+import requests
+from bs4 import BeautifulSoup
+import re
+import xlwt
+import collections
+down_url='http://movie.douban.com/top250'
+i=0
+def html_page(html):
+    return requests.get(html).content.decode('utf-8')
+def parms_page(movie_soup):
+    detail = movie_soup.find('div', attrs={'class': 'hd'})
+    movie_name = detail.find('span', attrs={'class': 'title'}).getText()  # 电影名
+
+    actor_detail = movie_soup.find('div', attrs={'class': 'bd'}).find('p').getText()  # 导演、年份等信息表
+    director = list(re.findall(r'导演:\s(.*?)\s.*\s*(\d+).*\s*?/\s*?(.*)/(.*)', actor_detail)[0])
+
+    comment_list = movie_soup.find('div', attrs={'class': 'star'})  # 定位到星级评分
+    brief = movie_soup.find('span', attrs={'class': 'inq'}).getText()  # 简介
+
+    comment = comment_list.find_all('span')
+    score = comment_list.find('span', attrs={'class': 'rating_num'}).getText()  # 评分
+    comment_num = comment[3].getText()  # 评价人数
+    director.append(brief)#追加简介到列表
+    director.append(score)#追加评分到列表
+    director.append(comment_num)#追加评价人数到列表
+    director.insert(0,movie_name)#director的结构为[电影名，导演，上映年份，制片国家，电影类型，简介，评分，评价人数]
+    return director
+def find_page(html):
+    soup=BeautifulSoup(html,'lxml')
+    global i
+    movie_list=soup.find('ol',attrs={'class':'grid_view'})
+    mov_list = collections.OrderedDict()#创建有序字典
+    for movie_li in movie_list.find_all('li'):
+        mov_list=parms_page(movie_li)
+        for j in range(0,8):
+            sheet.write(i, j, mov_list[j])
+        i+=1
+    next_url = soup.find('span', attrs={'class': 'next'}).find('a')
+    if next_url:
+        return mov_list,down_url+next_url['href']
+    else:
+        return mov_list,None
+url=down_url
+book=xlwt.Workbook(encoding='utf-8')
+sheet=book.add_sheet('test',cell_overwrite_ok=True)
+movies= collections.OrderedDict()
+while url:
+    movies,url=find_page(html_page(url))
+book.save(r'D:\豆瓣电影TOP250.xls')
